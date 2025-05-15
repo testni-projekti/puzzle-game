@@ -6,10 +6,11 @@ import { useToast } from "@/hooks/use-toast";
 import { PuzzleGame } from '@/components/PuzzleGame';
 import { DifficultySelector } from '@/components/DifficultySelector';
 import { BookInfo } from '@/components/BookInfo';
-import { Trophy } from 'lucide-react';
+import { Trophy, BookOpen, Info } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { BookCover } from '@/types/book';
 import { fetchRandomBookCover } from '@/lib/api';
+import { GameDescription } from '@/components/GameDescription';
 
 type Difficulty = {
   cols: number;
@@ -32,6 +33,7 @@ const Index = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showGameDescription, setShowGameDescription] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
@@ -98,6 +100,14 @@ const Index = () => {
         <p className="text-muted-foreground max-w-lg mx-auto">
           Sestavi naslovnice knjig iz COBISS Plus kataloga in odkrij nove zanimive knjige!
         </p>
+        <Button 
+          variant="ghost" 
+          className="mt-2 text-sm flex items-center gap-1"
+          onClick={() => setShowGameDescription(true)}
+        >
+          <Info className="h-4 w-4" />
+          Opis igre
+        </Button>
       </header>
 
       <div className="container mx-auto max-w-4xl">
@@ -136,7 +146,7 @@ const Index = () => {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="flex justify-center gap-4">
+            <CardFooter className="flex flex-wrap justify-center gap-4">
               <Button 
                 onClick={startGame} 
                 disabled={loading || !currentBook}
@@ -153,6 +163,17 @@ const Index = () => {
               >
                 Nova knjiga
               </Button>
+              {currentBook?.cobissUrl && (
+                <Button 
+                  variant="secondary"
+                  onClick={() => window.open(currentBook.cobissUrl, '_blank')}
+                  size={isMobile ? "lg" : "default"}
+                  className="flex items-center gap-1"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Odpri v COBISS Plus
+                </Button>
+              )}
             </CardFooter>
           </Card>
         ) : gameCompleted ? (
@@ -242,6 +263,11 @@ const Index = () => {
           </div>
         )}
       </div>
+
+      <GameDescription 
+        open={showGameDescription}
+        onClose={() => setShowGameDescription(false)}
+      />
     </div>
   );
 };
