@@ -74,7 +74,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     
     // Calculate the size of each puzzle piece
     const pieceWidth = containerSize.width / cols;
-    const pieceHeight = (pieceWidth * 1.4); // Maintain aspect ratio close to book covers
+    const pieceHeight = containerSize.height / rows;
     
     setPieceSize({ width: pieceWidth, height: pieceHeight });
     
@@ -91,7 +91,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
         
         // Randomize starting position within the container
         const randomX = Math.random() * (containerSize.width - pieceWidth);
-        const randomY = Math.random() * (containerSize.width - pieceHeight);
+        const randomY = Math.random() * (containerSize.height - pieceHeight);
         
         // Random rotation (0, 90, 180, or 270 degrees)
         const rotations = [0, 90, 180, 270];
@@ -150,7 +150,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   };
 
   const handlePieceTouchStart = (e: React.TouchEvent, id: number) => {
-    e.preventDefault();
     if (isRotating) return; // Don't start drag if we're rotating
     
     const piece = pieces.find(p => p.id === id);
@@ -205,7 +204,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
       if (piece.id === id) {
         // Ensure piece stays within bounds
         const boundedX = Math.min(Math.max(0, x), containerSize.width - pieceSize.width);
-        const boundedY = Math.min(Math.max(0, y), containerSize.width - pieceSize.height);
+        const boundedY = Math.min(Math.max(0, y), containerSize.height - pieceSize.height);
         return { ...piece, x: boundedX, y: boundedY };
       }
       return piece;
@@ -216,8 +215,8 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
         // Check if the piece is close to its correct position and has correct orientation
-        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.2;
-        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.2;
+        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
+        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
         const isCorrectRotation = piece.rotation % 360 === 0; // Only correct if not rotated
         
         // If close AND correctly oriented, snap to the correct position
@@ -226,6 +225,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             ...piece,
             x: piece.correctX,
             y: piece.correctY,
+            rotation: 0,
             isCorrect: true
           };
         }
@@ -261,32 +261,23 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     rotatePiece(id);
   };
 
-  const handleDoubleTap = (id: number) => {
-    rotatePiece(id);
-  };
+  // Improved tap detection for mobile
+  const lastTapRef = useRef<{ id: number, time: number } | null>(null);
   
-  // Debounced double tap detection
-  const tapTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastTapIdRef = useRef<number | null>(null);
-  
-  const handleTap = (id: number) => {
-    if (lastTapIdRef.current === id && tapTimerRef.current) {
+  const handleTap = (e: React.TouchEvent, id: number) => {
+    e.preventDefault(); // Prevent default to avoid unwanted behaviors
+    
+    const now = new Date().getTime();
+    const doubleTapDelay = 300; // milliseconds
+    
+    if (lastTapRef.current && lastTapRef.current.id === id && 
+        now - lastTapRef.current.time < doubleTapDelay) {
       // Double tap detected
-      clearTimeout(tapTimerRef.current);
-      tapTimerRef.current = null;
-      lastTapIdRef.current = null;
-      handleDoubleTap(id);
+      rotatePiece(id);
+      lastTapRef.current = null; // Reset after double tap
     } else {
       // First tap
-      if (tapTimerRef.current) {
-        clearTimeout(tapTimerRef.current);
-      }
-      
-      lastTapIdRef.current = id;
-      tapTimerRef.current = setTimeout(() => {
-        tapTimerRef.current = null;
-        lastTapIdRef.current = null;
-      }, 300); // 300ms window for double tap
+      lastTapRef.current = { id, time: now };
     }
   };
 
@@ -320,7 +311,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             key={piece.id}
             className={cn(
               "absolute cursor-grab active:cursor-grabbing",
-              piece.isCorrect ? "transition-all duration-300" : "transition-transform duration-300"
+              piece.isCorrect ? "transition-all duration-300 ease-in-out" : "transition-transform duration-300"
             )}
             style={{
               width: `${pieceSize.width}px`,
@@ -334,7 +325,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             onMouseDown={(e) => handlePieceMouseDown(e, piece.id)}
             onTouchStart={(e) => handlePieceTouchStart(e, piece.id)}
             onDoubleClick={(e) => handleDoubleClick(e, piece.id)}
-            onTouchEnd={() => isMobile && handleTap(piece.id)}
+            onTouchEnd={(e) => isMobile && handleTap(e, piece.id)}
           >
             <div 
               className={cn(

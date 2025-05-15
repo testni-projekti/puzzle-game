@@ -1,3 +1,3 @@
 
-// This is a placeholder for the success sound MP3 file
-// In a real implementation, you would place the actual audio file here
+// This is a binary file, so we can't write it directly in code
+// The existing file will be used for success sound effect

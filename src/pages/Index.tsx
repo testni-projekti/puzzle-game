@@ -70,10 +70,19 @@ const Index = () => {
   const handleGameComplete = () => {
     setGameCompleted(true);
     
-    // Play sound effect
+    // Play success sound effect
     const audio = new Audio('/success.mp3');
-    audio.play().catch(e => console.error("Audio playback failed", e));
+    audio.volume = 0.7; // Slightly lower volume (70%)
+    audio.play().catch(e => {
+      console.error("Audio playback failed", e);
+      // Show toast anyway, even if audio fails
+      toast({
+        title: "Čestitamo! 🎉",
+        description: "Uspešno ste sestavili sliko knjige!",
+      });
+    });
     
+    // Show completion toast
     toast({
       title: "Čestitamo! 🎉",
       description: "Uspešno ste sestavili sliko knjige!",
