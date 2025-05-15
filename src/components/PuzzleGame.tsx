@@ -34,6 +34,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [pieceSize, setPieceSize] = useState({ width: 0, height: 0 });
   const [isComplete, setIsComplete] = useState(false);
+  const [isRotating, setIsRotating] = useState(false); // Added to prevent dragging during rotation
   const isMobile = useIsMobile();
 
   // Load the image and set up the game
@@ -127,6 +128,8 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   // Handle piece movement
   const handlePieceMouseDown = (e: React.MouseEvent, id: number) => {
     e.preventDefault();
+    if (isRotating) return; // Don't start drag if we're rotating
+    
     const piece = pieces.find(p => p.id === id);
     
     if (piece) {
@@ -148,6 +151,8 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
 
   const handlePieceTouchStart = (e: React.TouchEvent, id: number) => {
     e.preventDefault();
+    if (isRotating) return; // Don't start drag if we're rotating
+    
     const piece = pieces.find(p => p.id === id);
     
     if (piece) {
@@ -198,7 +203,10 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const movePiece = (id: number, x: number, y: number) => {
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
-        return { ...piece, x, y };
+        // Ensure piece stays within bounds
+        const boundedX = Math.min(Math.max(0, x), containerSize.width - pieceSize.width);
+        const boundedY = Math.min(Math.max(0, y), containerSize.width - pieceSize.height);
+        return { ...piece, x: boundedX, y: boundedY };
       }
       return piece;
     }));
@@ -207,12 +215,12 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const checkPosition = (id: number) => {
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
-        // Check if the piece is close to its correct position
-        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.3;
-        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.3;
+        // Check if the piece is close to its correct position and has correct orientation
+        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.2;
+        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.2;
         const isCorrectRotation = piece.rotation % 360 === 0; // Only correct if not rotated
         
-        // If close, snap to the correct position
+        // If close AND correctly oriented, snap to the correct position
         if (isCloseX && isCloseY && isCorrectRotation) {
           return {
             ...piece,
@@ -229,13 +237,23 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   };
 
   const rotatePiece = (id: number) => {
+    setIsRotating(true);
+    
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
+        // Only allow 0, 90, 180, 270 degree rotations
         const newRotation = (piece.rotation + 90) % 360;
         return { ...piece, rotation: newRotation, isCorrect: false };
       }
       return piece;
     }));
+    
+    // Prevent drag events during rotation animation
+    setTimeout(() => {
+      setIsRotating(false);
+      // Check if rotation put piece in correct position
+      checkPosition(id);
+    }, 300); // Match the CSS transition duration
   };
 
   const handleDoubleClick = (e: React.MouseEvent, id: number) => {
@@ -302,7 +320,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             key={piece.id}
             className={cn(
               "absolute cursor-grab active:cursor-grabbing",
-              piece.isCorrect && "transition-all duration-300"
+              piece.isCorrect ? "transition-all duration-300" : "transition-transform duration-300"
             )}
             style={{
               width: `${pieceSize.width}px`,
@@ -321,12 +339,14 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             <div 
               className={cn(
                 "w-full h-full bg-white border-2 overflow-hidden",
-                piece.isCorrect ? "border-green-500" : "border-gray-400"
+                piece.isCorrect ? "border-green-500" : "border-gray-400",
+                "transition-all duration-200"  // Smooth transition for border changes
               )}
               style={{
                 backgroundImage: `url(${imageSrc})`,
                 backgroundSize: `${cols * 100}% ${rows * 100}%`,
                 backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
+                boxShadow: piece.isCorrect ? 'none' : '0 2px 4px rgba(0,0,0,0.2)'
               }}
             />
           </div>
