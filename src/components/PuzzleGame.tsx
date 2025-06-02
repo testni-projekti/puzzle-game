@@ -56,7 +56,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   // Zvočna animacija
   const playSuccessSound = () => {
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContext();
       const now = audioCtx.currentTime;
   
@@ -309,13 +309,15 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   };
 
-  // rotacija puzzla
+  // rotacija puzzla - improved to be exactly 90 degrees each time
   const rotatePiece = (id: number) => {
     setIsRotating(true);
     
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
-        return { ...piece, rotation: (piece.rotation + 90) % 360, isCorrect: false };
+        // Always rotate exactly 90 degrees
+        const newRotation = (piece.rotation + 90) % 360;
+        return { ...piece, rotation: newRotation, isCorrect: false };
       }
       return piece;
     }));
@@ -344,19 +346,12 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }, 300);
   };
 
-  // dvojni-tap za rotacijo
-  const lastTapRef = useRef<{ id: number; time: number } | null>(null);
-  const handleTap = (e: React.TouchEvent<HTMLDivElement>, id: number) => {
+  // Single click rotation for mobile (removed double-tap complexity)
+  const handlePieceClick = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, id: number) => {
     e.preventDefault();
-    const now = new Date().getTime();
-    
-    if (lastTapRef.current && 
-        lastTapRef.current.id === id && 
-        now - lastTapRef.current.time < 300) {
+    e.stopPropagation();
+    if (draggingPiece === null) { // Only rotate if we're not dragging
       rotatePiece(id);
-      lastTapRef.current = null;
-    } else {
-      lastTapRef.current = { id, time: now };
     }
   };
 
@@ -457,8 +452,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
               }}
               onMouseDown={(e) => handleDragStart(e, piece.id)}
               onTouchStart={(e) => handleDragStart(e, piece.id)}
-              onDoubleClick={() => rotatePiece(piece.id)}
-              onTouchEnd={(e) => isMobile && handleTap(e, piece.id)}
+              onClick={(e) => handlePieceClick(e, piece.id)}
             >
               {/* ce uspesno puzzle na pravi lokaciji zelen rob */}
               <div 
