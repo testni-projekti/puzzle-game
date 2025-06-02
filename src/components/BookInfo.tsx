@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { BookCover } from '@/types/book';
@@ -20,20 +19,6 @@ export const BookInfo: React.FC<BookInfoProps> = ({ book }) => {
           <span className="text-gray-600 font-medium">Avtor: </span>
           <span className="text-gray-900">{book.author}</span>
         </div>
-        
-        {book.year && (
-          <div>
-            <span className="text-gray-600 font-medium">Leto izdaje: </span>
-            <span className="text-gray-900">{book.year}</span>
-          </div>
-        )}
-        
-        {book.publisher && (
-          <div>
-            <span className="text-gray-600 font-medium">Založba: </span>
-            <span className="text-gray-900">{book.publisher}</span>
-          </div>
-        )}
       </div>
       
       {book.cobissUrl && (

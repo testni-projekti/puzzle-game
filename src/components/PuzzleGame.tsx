@@ -1,13 +1,12 @@
-
 import React, { useEffect, useState, useRef } from 'react';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Button } from '@/components/ui/button';
 
-interface PuzzleGameProps {
-  imageSrc: string;
-  rows: number;
-  cols: number;
-  onComplete: () => void;
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext;
+  }
 }
 
 interface PuzzlePiece {
@@ -20,6 +19,13 @@ interface PuzzlePiece {
   isCorrect: boolean;
 }
 
+interface PuzzleGameProps {
+  imageSrc: string;
+  rows: number;
+  cols: number;
+  onComplete: () => void;
+}
+
 export const PuzzleGame: React.FC<PuzzleGameProps> = ({ 
   imageSrc, 
   rows, 
@@ -29,81 +35,153 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [pieces, setPieces] = useState<PuzzlePiece[]>([]);
   const [draggingPiece, setDraggingPiece] = useState<number | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [pieceSize, setPieceSize] = useState({ width: 0, height: 0 });
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [pieceSize, setPieceSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [isComplete, setIsComplete] = useState(false);
-  const [isRotating, setIsRotating] = useState(false); // Added to prevent dragging during rotation
+  const [isRotating, setIsRotating] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [correctPieces, setCorrectPieces] = useState<Set<number>>(new Set());
   const isMobile = useIsMobile();
+  const [showSolution, setShowSolution] = useState(false);
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
-  // Load the image and set up the game
+  // Zvočna animacija
+  const playSuccessSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      const now = audioCtx.currentTime;
+  
+      const bufferSize = audioCtx.sampleRate * 0.04;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+  
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 3.0);
+      }
+  
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+  
+      const snapFilter = audioCtx.createBiquadFilter();
+      snapFilter.type = "bandpass";
+      snapFilter.frequency.setValueAtTime(800, now);
+      snapFilter.Q.setValueAtTime(7, now);
+  
+      const snapGain = audioCtx.createGain();
+      snapGain.gain.setValueAtTime(0.8, now);
+      snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+  
+      noise.connect(snapFilter);
+      snapFilter.connect(snapGain);
+      snapGain.connect(audioCtx.destination);
+  
+      const thumpOsc = audioCtx.createOscillator();
+      const thumpGain = audioCtx.createGain();
+      thumpOsc.type = "sine";
+      thumpOsc.frequency.setValueAtTime(120, now);
+      thumpGain.gain.setValueAtTime(0.5, now);
+      thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+  
+      thumpOsc.connect(thumpGain);
+      thumpGain.connect(audioCtx.destination);
+  
+      noise.start(now);
+      thumpOsc.start(now);
+      thumpOsc.stop(now + 0.3);
+    } catch (e) {
+      console.warn("Audio playback failed:", e);
+    }
+  };
+
+  // Preveri, ali se je spremenilo število pravilno postavljenih kosov
+  useEffect(() => {
+    const currentlyCorrect = new Set(
+      pieces.filter(p => p.isCorrect).map(p => p.id)
+    );
+    
+    // Če je novih pravilnih kosov več kot prej, predvajaj zvok
+    if (currentlyCorrect.size > correctPieces.size) {
+      playSuccessSound();
+    }
+    
+    setCorrectPieces(currentlyCorrect);
+    
+    // Preveri, ali je uganka rešena
+    if (pieces.length > 0 && pieces.every(piece => piece.isCorrect) && !isComplete) {
+      setIsComplete(true);
+      onComplete();
+    }
+  }, [pieces]);
+
+  // Load the image to get its natural dimensions
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
+      setImageAspectRatio(img.width / img.height);
       setImageLoaded(true);
-      initGame();
     };
     img.src = imageSrc;
-    
-    // Set up container size
-    const updateContainerSize = () => {
-      if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        setContainerSize({ width, height });
-      }
-    };
-    
-    updateContainerSize();
-    window.addEventListener('resize', updateContainerSize);
-    
-    return () => {
-      window.removeEventListener('resize', updateContainerSize);
-    };
   }, [imageSrc]);
-  
-  // Calculate piece size when container size is available
+
+  // Update container dimensions based on window size and image aspect ratio
+  useEffect(() => {
+    if (!imageAspectRatio) return;
+    
+    const updateSize = () => {
+      if (!containerRef.current) return;
+      
+      const maxWidth = Math.min(window.innerWidth * 0.9, 1200);
+      const maxHeight = window.innerHeight * 0.7;
+      
+      let width = maxWidth;
+      let height = width / imageAspectRatio;
+      
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * imageAspectRatio;
+      }
+      
+      setContainerDimensions({ width, height });
+      setContainerSize({ width, height });
+    };
+    
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, [imageAspectRatio]);
+
+  // Initialize game when container size is set and image is loaded
   useEffect(() => {
     if (containerSize.width > 0 && imageLoaded) {
       initGame();
     }
   }, [containerSize, imageLoaded, rows, cols]);
 
+  // inicializacija zacetek igre
   const initGame = () => {
     if (!containerRef.current || containerSize.width === 0) return;
     
-    // Calculate the size of each puzzle piece
     const pieceWidth = containerSize.width / cols;
-    const pieceHeight = containerSize.height / rows;
-    
+    const pieceHeight = pieceWidth * (1 / imageAspectRatio! * (cols / rows));
     setPieceSize({ width: pieceWidth, height: pieceHeight });
     
-    // Create puzzle pieces
     const newPieces: PuzzlePiece[] = [];
-    
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const id = row * cols + col;
-        
-        // Calculate correct position
         const correctX = col * pieceWidth;
         const correctY = row * pieceHeight;
         
-        // Randomize starting position within the container
-        const randomX = Math.random() * (containerSize.width - pieceWidth);
-        const randomY = Math.random() * (containerSize.height - pieceHeight);
-        
-        // Random rotation (0, 90, 180, or 270 degrees)
-        const rotations = [0, 90, 180, 270];
-        const randomRotation = rotations[Math.floor(Math.random() * rotations.length)];
-        
         newPieces.push({
           id,
-          x: randomX,
-          y: randomY,
+          x: Math.random() * (containerSize.width - pieceWidth),
+          y: Math.random() * (containerSize.height - pieceHeight),
           correctX,
           correctY,
-          rotation: randomRotation,
+          rotation: [0, 90, 180, 270][Math.floor(Math.random() * 4)],
           isCorrect: false
         });
       }
@@ -113,235 +191,260 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     setIsComplete(false);
   };
 
-  // Check if all pieces are in their correct positions
-  useEffect(() => {
-    if (pieces.length === 0) return;
-    
-    const allCorrect = pieces.every(piece => piece.isCorrect);
-    
-    if (allCorrect && !isComplete) {
-      setIsComplete(true);
-      onComplete();
-    }
-  }, [pieces, isComplete, onComplete]);
+  // zacetek premik z misko
+  const handleDragStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, id: number) => {
+    e.preventDefault(); // Dodano: preprečimo privzeto vedenje
+    if (isRotating) return;
 
-  // Handle piece movement
-  const handlePieceMouseDown = (e: React.MouseEvent, id: number) => {
+    const piece = pieces.find(p => p.id === id);
+    if (!piece) return;
+
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    
+    // upravljanje mouse eventov
+    if ('clientX' in e) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+    // upravljanje touch eventov
+    else if ('touches' in e) {
+      setDragOffset({
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      });
+    }
+
+    /*Offset je pomemben zato, ker:
+    - Drži relativno pozicijo miške glede na container.
+    - Poskrbi, da container ostane pod miško tudi, ko ga premikamo.
+    - Poskrbi za gladko premikanje brez skakanja container. */
+    
+    setDraggingPiece(id);
+    // Premaknemo kos na vrh (konec seznama)
+    setPieces(prev => [...prev.filter(p => p.id !== id), piece]);
+  };
+
+  // premik z misko
+  const handleDragMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (draggingPiece === null) return; // Preverimo, ali sploh vlečemo kateri koli kos
+    
+    // Preprečimo privzeto vedenje (npr. izbiro besedila ali premikanje strani)
     e.preventDefault();
-    if (isRotating) return; // Don't start drag if we're rotating
     
-    const piece = pieces.find(p => p.id === id);
-    
-    if (piece) {
-      // Calculate the offset from the mouse click point to the piece's top-left corner
-      const rect = (e.target as HTMLElement).getBoundingClientRect();
-      const offsetX = e.clientX - rect.left;
-      const offsetY = e.clientY - rect.top;
-      
-      setDragOffset({ x: offsetX, y: offsetY });
-      setDraggingPiece(id);
-      
-      // Bring the piece to the front by moving it to the end of the array
-      setPieces(prev => [
-        ...prev.filter(p => p.id !== id),
-        piece
-      ]);
+    const containerRect = containerRef.current!.getBoundingClientRect();
+    let clientX: number, clientY: number;
+
+    // upravljanje mouse eventov
+    if ('clientX' in e) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } 
+    // upravljanje touch eventov
+    else if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      return; // Če ni veljavnih koordinat, ne naredimo nič
     }
+
+    const x = clientX - containerRect.left - dragOffset.x;
+    const y = clientY - containerRect.top - dragOffset.y;
+
+    // Posodobimo le tisti kos, ki ga premikamo
+    setPieces(prev => prev.map(piece => {
+      if (piece.id === draggingPiece) {
+        const boundedX = Math.min(Math.max(0, x), containerSize.width - pieceSize.width);
+        const boundedY = Math.min(Math.max(0, y), containerSize.height - pieceSize.height);
+        return { ...piece, x: boundedX, y: boundedY, isCorrect: false };
+      }
+      return piece;
+    }));
   };
 
-  const handlePieceTouchStart = (e: React.TouchEvent, id: number) => {
-    if (isRotating) return; // Don't start drag if we're rotating
-    
-    const piece = pieces.find(p => p.id === id);
-    
-    if (piece) {
-      const touch = e.touches[0];
-      const rect = (e.target as HTMLElement).getBoundingClientRect();
-      const offsetX = touch.clientX - rect.left;
-      const offsetY = touch.clientY - rect.top;
-      
-      setDragOffset({ x: offsetX, y: offsetY });
-      setDraggingPiece(id);
-      
-      // Bring the piece to the front
-      setPieces(prev => [
-        ...prev.filter(p => p.id !== id),
-        piece
-      ]);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
+  // konec premika miske in preverjanje ce je pozicija ok
+  const handleDragEnd = () => {
     if (draggingPiece !== null) {
-      const containerRect = containerRef.current!.getBoundingClientRect();
-      const x = e.clientX - containerRect.left - dragOffset.x;
-      const y = e.clientY - containerRect.top - dragOffset.y;
+      // Preverimo, ali je kos na pravi poziciji
+      setPieces(prev => prev.map(piece => {
+        if (piece.id === draggingPiece) {
+          const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
+          const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
+          const isCorrectRotation = piece.rotation % 360 === 0;
+          
+          // Če je kos dovolj blizu in pravilno obrnjen, ga poravnamo
+          if (isCloseX && isCloseY && isCorrectRotation) {
+            return {
+              ...piece,
+              x: piece.correctX,
+              y: piece.correctY,
+              rotation: 0,
+              isCorrect: true
+            };
+          }
+          return { ...piece, isCorrect: false };
+        }
+        return piece;
+      }));
       
-      movePiece(draggingPiece, x, y);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (draggingPiece !== null) {
-      const touch = e.touches[0];
-      const containerRect = containerRef.current!.getBoundingClientRect();
-      const x = touch.clientX - containerRect.left - dragOffset.x;
-      const y = touch.clientY - containerRect.top - dragOffset.y;
-      
-      movePiece(draggingPiece, x, y);
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (draggingPiece !== null) {
-      checkPosition(draggingPiece);
       setDraggingPiece(null);
     }
   };
 
-  const movePiece = (id: number, x: number, y: number) => {
-    setPieces(prev => prev.map(piece => {
-      if (piece.id === id) {
-        // Ensure piece stays within bounds
-        const boundedX = Math.min(Math.max(0, x), containerSize.width - pieceSize.width);
-        const boundedY = Math.min(Math.max(0, y), containerSize.height - pieceSize.height);
-        return { ...piece, x: boundedX, y: boundedY };
-      }
-      return piece;
-    }));
-  };
-
-  const checkPosition = (id: number) => {
-    setPieces(prev => prev.map(piece => {
-      if (piece.id === id) {
-        // Check if the piece is close to its correct position and has correct orientation
-        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
-        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
-        const isCorrectRotation = piece.rotation % 360 === 0; // Only correct if not rotated
-        
-        // If close AND correctly oriented, snap to the correct position
-        if (isCloseX && isCloseY && isCorrectRotation) {
-          return {
-            ...piece,
-            x: piece.correctX,
-            y: piece.correctY,
-            rotation: 0,
-            isCorrect: true
-          };
-        }
-        
-        return { ...piece, isCorrect: false };
-      }
-      return piece;
-    }));
-  };
-
+  // rotacija puzzla
   const rotatePiece = (id: number) => {
     setIsRotating(true);
     
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
-        // Only allow 0, 90, 180, 270 degree rotations
-        const newRotation = (piece.rotation + 90) % 360;
-        return { ...piece, rotation: newRotation, isCorrect: false };
+        return { ...piece, rotation: (piece.rotation + 90) % 360, isCorrect: false };
       }
       return piece;
     }));
     
-    // Prevent drag events during rotation animation
     setTimeout(() => {
       setIsRotating(false);
-      // Check if rotation put piece in correct position
-      checkPosition(id);
-    }, 300); // Match the CSS transition duration
+      
+      setPieces(prev => prev.map(piece => {
+        if (piece.id === id) {
+          const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
+          const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
+          const isCorrectRotation = piece.rotation % 360 === 0;
+          
+          if (isCloseX && isCloseY && isCorrectRotation) {
+            return {
+              ...piece,
+              x: piece.correctX,
+              y: piece.correctY,
+              rotation: 0,
+              isCorrect: true
+            };
+          }
+        }
+        return piece;
+      }));
+    }, 300);
   };
 
-  const handleDoubleClick = (e: React.MouseEvent, id: number) => {
+  // dvojni-tap za rotacijo
+  const lastTapRef = useRef<{ id: number; time: number } | null>(null);
+  const handleTap = (e: React.TouchEvent<HTMLDivElement>, id: number) => {
     e.preventDefault();
-    rotatePiece(id);
-  };
-
-  // Improved tap detection for mobile
-  const lastTapRef = useRef<{ id: number, time: number } | null>(null);
-  
-  const handleTap = (e: React.TouchEvent, id: number) => {
-    e.preventDefault(); // Prevent default to avoid unwanted behaviors
-    
     const now = new Date().getTime();
-    const doubleTapDelay = 300; // milliseconds
     
-    if (lastTapRef.current && lastTapRef.current.id === id && 
-        now - lastTapRef.current.time < doubleTapDelay) {
-      // Double tap detected
+    if (lastTapRef.current && 
+        lastTapRef.current.id === id && 
+        now - lastTapRef.current.time < 300) {
       rotatePiece(id);
-      lastTapRef.current = null; // Reset after double tap
+      lastTapRef.current = null;
     } else {
-      // First tap
       lastTapRef.current = { id, time: now };
     }
   };
 
+  // Toggle solution visibility
+  const toggleSolution = () => {
+    setShowSolution(!showSolution);
+  };
+
   return (
-    <div className="flex justify-center">
-      <div 
-        ref={containerRef}
-        className="relative w-full aspect-[3/4] max-w-lg bg-gray-100 rounded-md shadow-inner overflow-hidden touch-none"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleMouseUp}
+    <div className="flex flex-col items-center w-full gap-4">
+      {/* Solution toggle button */}
+      <Button 
+        variant="outline" 
+        onClick={toggleSolution}
+        className="mb-2"
       >
-        {/* Background grid to visualize puzzle positions */}
-        <div 
-          className="absolute inset-0 grid" 
-          style={{ 
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gridTemplateRows: `repeat(${rows}, 1fr)`
-          }}
-        >
-          {Array.from({ length: rows * cols }).map((_, i) => (
-            <div key={`grid-${i}`} className="border border-dashed border-gray-300" />
-          ))}
-        </div>
-        
-        {/* Puzzle pieces */}
-        {pieces.map((piece) => (
-          <div
-            key={piece.id}
-            className={cn(
-              "absolute cursor-grab active:cursor-grabbing",
-              piece.isCorrect ? "transition-all duration-300 ease-in-out" : "transition-transform duration-300"
-            )}
+        {showSolution ? 'Skrij rešitev' : 'Prikaži rešitev'}
+      </Button>
+      
+      <div className="relative" style={{
+        width: `${containerDimensions.width}px`,
+        height: `${containerDimensions.height}px`,
+        maxWidth: '90vw',
+        maxHeight: '70vh'
+      }}>
+        {/* Background solution */}
+        {showSolution && (
+          <div 
+            className="absolute inset-0 z-0"
             style={{
-              width: `${pieceSize.width}px`,
-              height: `${pieceSize.height}px`,
-              left: `${piece.x}px`,
-              top: `${piece.y}px`,
-              zIndex: draggingPiece === piece.id ? 10 : 1,
-              transform: `rotate(${piece.rotation}deg)`,
-              touchAction: "none"
+              backgroundImage: `url(${imageSrc})`,
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              width: '100%',
+              height: '100%',
             }}
-            onMouseDown={(e) => handlePieceMouseDown(e, piece.id)}
-            onTouchStart={(e) => handlePieceTouchStart(e, piece.id)}
-            onDoubleClick={(e) => handleDoubleClick(e, piece.id)}
-            onTouchEnd={(e) => isMobile && handleTap(e, piece.id)}
+          />
+        )}
+        
+        {/* Puzzle container */}
+        <div 
+          ref={containerRef}
+          className={cn(
+            "relative w-full h-full rounded-md shadow-inner overflow-hidden touch-none",
+            showSolution ? 'bg-white/30' : 'bg-white/90',
+            !imageLoaded && 'invisible'
+          )}
+          onMouseMove={(e) => handleDragMove(e)}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+          onTouchMove={(e) => handleDragMove(e)}
+          onTouchEnd={handleDragEnd}
+        >
+          {/* Grid */}
+          <div 
+            className="absolute inset-0 grid pointer-events-none" 
+            style={{ 
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              gridTemplateRows: `repeat(${rows}, 1fr)`
+            }}
           >
-            <div 
+            {Array.from({ length: rows * cols }).map((_, i) => (
+              <div key={`grid-${i}`} className="border border-dashed border-gray-300" />
+            ))}
+          </div>
+          
+          {pieces.map((piece) => (
+            <div
+              key={piece.id}
               className={cn(
-                "w-full h-full bg-white border-2 overflow-hidden",
-                piece.isCorrect ? "border-green-500" : "border-gray-400",
-                "transition-all duration-200"  // Smooth transition for border changes
+                "absolute cursor-grab active:cursor-grabbing",
+                "transition-transform duration-300"
               )}
               style={{
-                backgroundImage: `url(${imageSrc})`,
-                backgroundSize: `${cols * 100}% ${rows * 100}%`,
-                backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
-                boxShadow: piece.isCorrect ? 'none' : '0 2px 4px rgba(0,0,0,0.2)'
+                width: `${pieceSize.width}px`,
+                height: `${pieceSize.height}px`,
+                left: `${piece.x}px`,
+                top: `${piece.y}px`,
+                zIndex: draggingPiece === piece.id ? 10 : 1,
+                transform: `rotate(${piece.rotation}deg)`,
+                touchAction: "none"
               }}
-            />
-          </div>
-        ))}
+              onMouseDown={(e) => handleDragStart(e, piece.id)}
+              onTouchStart={(e) => handleDragStart(e, piece.id)}
+              onDoubleClick={() => rotatePiece(piece.id)}
+              onTouchEnd={(e) => isMobile && handleTap(e, piece.id)}
+            >
+              {/* ce uspesno puzzle na pravi lokaciji zelen rob */}
+              <div 
+                className={cn(
+                  "w-full h-full bg-white border-2 overflow-hidden",
+                  piece.isCorrect ? "border-green-500" : "border-gray-400",
+                  "transition-all duration-200"
+                )}
+                style={{
+                  backgroundImage: `url(${imageSrc})`,
+                  backgroundSize: `${cols * 100}% ${rows * 100}%`,
+                  backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
+                  boxShadow: piece.isCorrect ? 'none' : '0 2px 4px rgba(0,0,0,0.2)'
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

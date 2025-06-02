@@ -1,6 +1,4 @@
-
 import React from 'react';
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Difficulty = {
@@ -13,32 +11,66 @@ interface DifficultySelectorProps {
   difficulties: Difficulty[];
   selected: Difficulty;
   onChange: (difficulty: Difficulty) => void;
+  className?: string;
 }
 
 export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
   difficulties,
   selected,
-  onChange
+  onChange,
+  className
 }) => {
-  return (
-    <div className="space-y-3">
-      <p className="font-medium text-gray-700">Izberi težavnost:</p>
-      <div className="flex flex-wrap gap-2">
-        {difficulties.map((difficulty) => (
-          <Button
-            key={difficulty.label}
-            variant={selected.label === difficulty.label ? "default" : "outline"}
-            className={cn(
-              "transition-all",
-              selected.label === difficulty.label 
-                ? "bg-primary text-primary-foreground" 
-                : "hover:bg-primary/10"
+  // Always split into two rows with 3 items each
+  const firstRow = difficulties.slice(0, 3);
+  const secondRow = difficulties.slice(3);
+
+  // Define colors for each difficulty level (blue to red gradient)
+  const difficultyColors = [
+    'from-blue-400 to-blue-500',    // Easiest
+    'from-blue-300 to-blue-400',
+    'from-cyan-300 to-cyan-400',
+    'from-amber-300 to-amber-400',
+    'from-orange-400 to-orange-500',
+    'from-red-400 to-red-500'      // Hardest
+  ];
+
+  const renderButtonRow = (difficulties: Difficulty[], isSecondRow = false) => (
+    <div className={`flex items-center ${isSecondRow ? 'mt-3' : ''}`}>
+      {difficulties.map((difficulty, index) => {
+        const isSelected = selected.label === difficulty.label;
+        const difficultyIndex = isSecondRow ? index + 3 : index;
+        const bgGradient = difficultyColors[difficultyIndex] || 'from-gray-200 to-gray-300';
+        
+        return (
+          <React.Fragment key={difficulty.label}>
+            {index > 0 && (
+              <div className="h-6 w-px bg-gray-300 mx-1.5" />
             )}
-            onClick={() => onChange(difficulty)}
-          >
-            {difficulty.label}
-          </Button>
-        ))}
+            <button
+              className={cn(
+                "px-4 py-4 text-base font-medium transition-all duration-150 h-14 flex-1 min-w-0",
+                "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400",
+                "rounded-xl whitespace-nowrap bg-[#EEEEEF]",
+                isSelected 
+                  ? `text-white bg-gradient-to-r ${bgGradient} shadow-md`
+                  : "text-gray-600 hover:bg-gray-200"
+              )}
+              onClick={() => onChange(difficulty)}
+            >
+              {difficulty.label.split(' ')[0]}
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className={cn("w-full px-5 py-4 max-w-3xl mx-auto", className)}>
+      <p className="text-lg font-medium text-gray-600 mb-3 px-1">Težavnost</p>
+      <div className="bg-[#EEEEEF] rounded-2xl p-2 w-full">
+        {renderButtonRow(firstRow)}
+        {secondRow.length > 0 && renderButtonRow(secondRow, true)}
       </div>
     </div>
   );
