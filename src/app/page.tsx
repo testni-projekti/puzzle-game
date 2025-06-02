@@ -70,7 +70,6 @@ export default function Home() {
   }, []);
 
   const loadRandomBook = async () => {
-    
     const booksCollection = collection(db, 'books');
     const snapshot = await getDocs(booksCollection);
     const booksData = snapshot.docs.map(doc => doc.data());
@@ -211,6 +210,8 @@ export default function Home() {
                         <ScoreDisplay 
                           scoreResult={finalScore}
                           completionTime={completionTime}
+                          rows={selectedDifficulty.rows}
+                          cols={selectedDifficulty.cols}
                         />
                       )}
                       <BookInfo book={currentBook} />

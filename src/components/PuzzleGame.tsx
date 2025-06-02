@@ -1,15 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Timer } from '@/components/Timer';
 import { getScoringConfig, calculateScore, ScoreResult } from '@/utils/scoringSystem';
-
-declare global {
-  interface Window {
-    webkitAudioContext: typeof AudioContext;
-  }
-}
+import { GameStorage } from '@/utils/gameStorage';
 
 interface PuzzlePiece {
   id: number;
@@ -52,6 +47,11 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [gameTimer, setGameTimer] = useState(false);
   const scoringConfig = getScoringConfig(rows, cols);
+
+  // Use useCallback to prevent unnecessary re-renders
+  const handleTimeUpdate = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
 
   // Zvočna animacija
   const playSuccessSound = () => {
@@ -110,26 +110,25 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   }, [pieces, gameStartTime]);
 
-  // Preveri, ali se je spremenilo število pravilno postavljenih kosov
+  // Check for correct pieces and game completion
   useEffect(() => {
     const currentlyCorrect = new Set(
       pieces.filter(p => p.isCorrect).map(p => p.id)
     );
     
-    // Če je novih pravilnih kosov več kot prej, predvajaj zvok
     if (currentlyCorrect.size > correctPieces.size) {
       playSuccessSound();
     }
     
     setCorrectPieces(currentlyCorrect);
     
-    // Preveri, ali je uganka rešena
     if (pieces.length > 0 && pieces.every(piece => piece.isCorrect) && !isComplete) {
       setIsComplete(true);
       setGameTimer(false);
       
-      // Calculate final score
+      // Calculate final score and save to localStorage
       const scoreResult = calculateScore(currentTime, rows, cols);
+      GameStorage.saveResult(rows, cols, currentTime, scoreResult.points, scoreResult.maxPoints, scoreResult.rank);
       onComplete(scoreResult, currentTime);
     }
   }, [pieces, currentTime, rows, cols, isComplete, correctPieces.size, onComplete]);
@@ -364,10 +363,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   // Toggle solution visibility
   const toggleSolution = () => {
     setShowSolution(!showSolution);
-  };
-
-  const handleTimeUpdate = (time: number) => {
-    setCurrentTime(time);
   };
 
   return (
