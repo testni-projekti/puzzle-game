@@ -1,14 +1,15 @@
-// app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "../styles/globals.css";
 import { Toaster } from "@/components/ui/toast";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Knjižni puzzle",
-  description: "Knjižni puzzle",
+  title: "COBISS Puzzle - Knjižni puzzle",
+  description: "Sestavite sliko knjige iz posameznih kosov in preizkusite svojo spretnost!",
 };
 
 export default function RootLayout({
@@ -19,8 +20,15 @@ export default function RootLayout({
   return (
     <html lang="sl" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
