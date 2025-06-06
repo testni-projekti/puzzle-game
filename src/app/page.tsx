@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -112,7 +111,6 @@ export default function Home() {
       toast({
         title: "Napaka",
         description: "Napaka pri nalaganju knjige. Poskusite znova.",
-        variant: "destructive"
       });
     }
   };
