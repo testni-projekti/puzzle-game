@@ -132,46 +132,46 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-2rem)]">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-2 sm:p-4">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-1rem)] sm:min-h-[calc(100vh-2rem)]">
         {!gameStarted ? (
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm w-full max-w-5xl">
-            <CardHeader className="text-center pb-4">
-              <CardTitle className="text-3xl md:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 font-bold">
+            <CardHeader className="text-center pb-2 sm:pb-4">
+              <CardTitle className="text-2xl sm:text-3xl md:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 font-bold">
                 📚 COBISS Puzzle
               </CardTitle>
-              <p className="text-gray-600 mt-2">Sestavi puzzle in spoznaj slovensko literaturo</p>
+              <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Sestavi puzzle in spoznaj slovensko literaturo</p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 sm:px-6">
               {currentBook ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
                   <div className="flex justify-center">
                     <div className="relative group">
                       <img
                         src={currentBook.coverUrl} 
                         alt={currentBook.title} 
-                        className="h-80 sm:h-96 object-contain rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105" 
+                        className="h-60 sm:h-80 md:h-96 object-contain rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105" 
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     </div>
                   </div>
                   <div className="w-full">
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-6 shadow-sm border border-gray-200">
-                      <div className="min-h-[120px] mb-6">
-                        <h3 className="text-2xl font-bold mb-3 text-gray-800 line-clamp-2" title={currentBook.title}>
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-200">
+                      <div className="min-h-[100px] sm:min-h-[120px] mb-4 sm:mb-6">
+                        <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 text-gray-800 line-clamp-2" title={currentBook.title}>
                           {currentBook.title}
                         </h3>
-                        <p className="text-lg text-gray-600 mb-2" title={`Avtor: ${currentBook.author}`}>
+                        <p className="text-sm sm:text-lg text-gray-600 mb-2" title={`Avtor: ${currentBook.author}`}>
                           <span className="font-medium">Avtor:</span> {currentBook.author}
                         </p>
                         {currentBook.quote && (
-                          <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg">
-                            <p className="text-sm text-blue-700 italic">"{currentBook.quote}"</p>
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-2 sm:p-3 rounded-r-lg">
+                            <p className="text-xs sm:text-sm text-blue-700 italic">"{currentBook.quote}"</p>
                           </div>
                         )}
                       </div>
                       
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-4">
                         <DifficultySelector 
                           difficulties={DIFFICULTIES}
                           selected={selectedDifficulty}
@@ -179,22 +179,22 @@ export default function Home() {
                           className="w-full"
                         />
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                           <Button 
                             onClick={startGame} 
                             disabled={!currentBook}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 shadow-md hover:shadow-lg transition-all duration-200 rounded-xl font-semibold"
-                            size="lg"
+                            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-2 sm:py-3 shadow-md hover:shadow-lg transition-all duration-200 rounded-xl font-semibold text-sm sm:text-base"
+                            size={isMobile ? "default" : "lg"}
                           >
                             🎮 Začni igro
                           </Button>
                           <Button 
                             variant="outline" 
                             onClick={loadRandomBook}
-                            className="bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-gray-300 py-3 shadow-sm hover:shadow-md transition-all duration-200 rounded-xl font-semibold"
-                            size="lg"
+                            className="bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-gray-300 py-2 sm:py-3 shadow-sm hover:shadow-md transition-all duration-200 rounded-xl font-semibold text-sm sm:text-base"
+                            size={isMobile ? "default" : "lg"}
                           >
-                            <RotateCcw className="h-4 w-4 mr-2" />
+                            <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                             Nova knjiga
                           </Button>
                         </div>
@@ -211,7 +211,7 @@ export default function Home() {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="flex flex-wrap justify-center gap-4 pt-6">
+            <CardFooter className="flex flex-wrap justify-center gap-2 sm:gap-4 pt-4 sm:pt-6 px-3 sm:px-6">
               <StatisticsDialog />
               <InstructionsDialog />
               <SettingsDialog />
@@ -219,10 +219,10 @@ export default function Home() {
                 <Button 
                   variant="secondary"
                   onClick={() => window.open(currentBook.cobissUrl, '_blank')}
-                  size={isMobile ? "lg" : "default"}
-                  className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-xl"
+                  size={isMobile ? "default" : "default"}
+                  className="flex items-center gap-1 sm:gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-xl text-xs sm:text-sm"
                 >
-                  <BookOpen className="h-4 w-4" />
+                  <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
                   COBISS Plus
                 </Button>
               )}
@@ -296,17 +296,17 @@ export default function Home() {
             </Card>
           </div>
         ) : (
-          <div className="w-full max-w-7xl space-y-6">
+          <div className="w-full max-w-7xl space-y-3 sm:space-y-6">
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm w-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-center text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 font-bold">
+              <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6">
+                <CardTitle className="text-center text-xl sm:text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 font-bold">
                   🧩 {selectedDifficulty.cols}×{selectedDifficulty.rows} Puzzle
                 </CardTitle>
-                <p className="text-center text-gray-600">
-                  Kliknite na kos za obračanje • Povlecite za premikanje
+                <p className="text-center text-gray-600 text-xs sm:text-sm">
+                  Kliknite za obračanje • Povlecite za premikanje
                 </p>
               </CardHeader>
-              <CardContent className="pt-0 px-4 md:px-8 pb-6">
+              <CardContent className="pt-0 px-2 sm:px-4 md:px-8 pb-3 sm:pb-6">
                 {currentBook && (
                   <div className="flex justify-center w-full">
                     <div className="w-full max-w-[1400px]">
@@ -320,14 +320,14 @@ export default function Home() {
                   </div>
                 )}
               </CardContent>
-              <CardFooter className="flex justify-center gap-4 pb-6">
+              <CardFooter className="flex justify-center gap-2 sm:gap-4 pb-3 sm:pb-6 px-3 sm:px-6">
                 <Button 
                   variant="outline" 
                   onClick={playAgain}
-                  className="bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-gray-300 py-2 px-6 shadow-sm hover:shadow-md transition-all duration-200 rounded-xl font-medium"
-                  size={isMobile ? "lg" : "default"}
+                  className="bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-gray-300 py-1 sm:py-2 px-3 sm:px-6 shadow-sm hover:shadow-md transition-all duration-200 rounded-xl font-medium text-xs sm:text-sm"
+                  size={isMobile ? "sm" : "default"}
                 >
-                  ← Nazaj na izbiro
+                  ← Nazaj
                 </Button>
                 <SettingsDialog />
                 <InstructionsDialog />
