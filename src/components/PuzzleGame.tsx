@@ -1,16 +1,18 @@
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Timer } from '@/components/Timer';
 import { getScoringConfig, calculateScore, ScoreResult } from '@/utils/scoringSystem';
+import { GameStorage } from '@/utils/gameStorage';
+import { Eye, EyeOff } from 'lucide-react';
 
 declare global {
   interface Window {
     webkitAudioContext: typeof AudioContext;
   }
 }
-import { GameStorage } from '@/utils/gameStorage';
 
 interface PuzzlePiece {
   id: number;
@@ -42,7 +44,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [pieceSize, setPieceSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [isComplete, setIsComplete] = useState(false);
-  const [isRotating, setIsRotating] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [correctPieces, setCorrectPieces] = useState<Set<number>>(new Set());
   const isMobile = useIsMobile();
@@ -52,14 +53,14 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const [gameStartTime, setGameStartTime] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [gameTimer, setGameTimer] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [pointsLostToHints, setPointsLostToHints] = useState(0);
   const scoringConfig = getScoringConfig(rows, cols);
 
-  // uporaba useCallback za preprecevanje nepotrebnih ponovnih upodobitev
   const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
   }, []);
 
-  // zvocna animacija
   const playSuccessSound = () => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -108,7 +109,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   };
 
-  // zazeni timer ob inicializaciji igre
   useEffect(() => {
     if (pieces.length > 0 && !gameStartTime) {
       setGameStartTime(Date.now());
@@ -116,31 +116,27 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   }, [pieces, gameStartTime]);
 
-  // ali se je spremenilo stevilo pravilno postavljenih kosov
   useEffect(() => {
     const currentlyCorrect = new Set(
       pieces.filter(p => p.isCorrect).map(p => p.id)
     );
     
-    // ce je novih pravilnih kosov vec kot prej, predvajaj zvok
     if (currentlyCorrect.size > correctPieces.size) {
       playSuccessSound();
     }
     
     setCorrectPieces(currentlyCorrect);
     
-    // preveri, ali je puzzle koncan
     if (pieces.length > 0 && pieces.every(piece => piece.isCorrect) && !isComplete) {
       setIsComplete(true);
       setGameTimer(false);
       
       const scoreResult = calculateScore(currentTime, rows, cols);
-      GameStorage.saveResult(rows, cols, currentTime, scoreResult.points, scoreResult.maxPoints, scoreResult.rank);
+      GameStorage.saveResult(rows, cols, currentTime, scoreResult.points, scoreResult.maxPoints, scoreResult.rank, hintsUsed, pointsLostToHints);
       onComplete(scoreResult, currentTime);
     }
-  }, [pieces, currentTime, rows, cols, isComplete, correctPieces.size, onComplete]);
+  }, [pieces, currentTime, rows, cols, isComplete, correctPieces.size, onComplete, hintsUsed, pointsLostToHints]);
 
-  // nalaganje slike za pridobitev njenih originalnih dimenzij
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
@@ -150,7 +146,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     img.src = imageSrc;
   }, [imageSrc]);
 
-  // posodobitev dimenzij kontejnerja glede na velikost okna in razmerje slike
   useEffect(() => {
     if (!imageAspectRatio) return;
     
@@ -177,14 +172,12 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     return () => window.removeEventListener('resize', updateSize);
   }, [imageAspectRatio]);
 
-  // inicializacija igre, ko so nastavljene dimenzije kontejnerja in je slika nalozena
   useEffect(() => {
     if (containerSize.width > 0 && imageLoaded) {
       initGame();
     }
   }, [containerSize, imageLoaded, rows, cols]);
 
-  // inicializacija zacetek igre
   const initGame = () => {
     if (!containerRef.current || containerSize.width === 0) return;
     
@@ -213,70 +206,57 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     
     setPieces(newPieces);
     setIsComplete(false);
+    setHintsUsed(0);
+    setPointsLostToHints(0);
   };
 
-  // zacetek premik z misko
   const handleDragStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, id: number) => {
     e.preventDefault();   
-    if (isRotating) return;
 
     const piece = pieces.find(p => p.id === id);
     if (!piece) return;
 
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     
-    // upravljanje mouse eventov
     if ('clientX' in e) {
       setDragOffset({
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
       });
     }
-    // upravljanje touch eventov
     else if ('touches' in e) {
       setDragOffset({
         x: e.touches[0].clientX - rect.left,
         y: e.touches[0].clientY - rect.top
       });
     }
-
-    /*offset je pomemben zato, ker:
-    - Drzi relativno pozicijo miske glede na container.
-    - Poskrbi, da container ostane pod misko tudi, ko ga premikamo.
-    - Poskrbi za gladko premikanje brez skakanja container. */
     
     setDraggingPiece(id);
-    // Premaknemo kos na vrh (konec seznama)
     setPieces(prev => [...prev.filter(p => p.id !== id), piece]);
   };
 
-  // premik z misko
   const handleDragMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
-    if (draggingPiece === null) return; // preverimo, ali sploh premikamo kateri koli kos
+    if (draggingPiece === null) return;
     
-    // preprečimo privzeto vedenje (npr. izbiro besedila ali premikanje strani)
     e.preventDefault();
     
     const containerRect = containerRef.current!.getBoundingClientRect();
     let clientX: number, clientY: number;
 
-    // upravljanje mouse eventov
     if ('clientX' in e) {
       clientX = e.clientX;
       clientY = e.clientY;
     } 
-    // upravljanje touch eventov
     else if ('touches' in e) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
     } else {
-      return; // ce ni veljavnih koordinat, ne naredimo nic
+      return;
     }
 
     const x = clientX - containerRect.left - dragOffset.x;
     const y = clientY - containerRect.top - dragOffset.y;
 
-    // posodobimo le tisti kos, ki ga premikamo
     setPieces(prev => prev.map(piece => {
       if (piece.id === draggingPiece) {
         const boundedX = Math.min(Math.max(0, x), containerSize.width - pieceSize.width);
@@ -287,17 +267,14 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }));
   };
 
-  // konec premika miske in preverjanje ce je pozicija ok
   const handleDragEnd = () => {
     if (draggingPiece !== null) {
-      // preverimo, ali je kos na pravi poziciji
       setPieces(prev => prev.map(piece => {
         if (piece.id === draggingPiece) {
           const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
           const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
           const isCorrectRotation = piece.rotation % 360 === 0;
           
-          // ce je kos dovolj blizu in pravilno obrnjen, ga poravnamo
           if (isCloseX && isCloseY && isCorrectRotation) {
             return {
               ...piece,
@@ -315,64 +292,40 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   };
 
-  // rotacija puzzla
+  // Popravljena rotacija - en klik
   const rotatePiece = (id: number) => {
-    setIsRotating(true);
-    
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
-        return { ...piece, rotation: piece.rotation + 90, isCorrect: false };
+        const newRotation = (piece.rotation + 90) % 360;
+        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
+        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
+        const isCorrectRotation = newRotation === 0;
+        
+        return {
+          ...piece,
+          rotation: newRotation,
+          isCorrect: isCloseX && isCloseY && isCorrectRotation,
+          x: isCloseX && isCloseY && isCorrectRotation ? piece.correctX : piece.x,
+          y: isCloseX && isCloseY && isCorrectRotation ? piece.correctY : piece.y
+        };
       }
       return piece;
     }));
-    
-    setTimeout(() => {
-      setIsRotating(false);
-      
-      setPieces(prev => prev.map(piece => {
-        if (piece.id === id) {
-          const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
-          const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
-          const isCorrectRotation = piece.rotation % 360 === 0;
-          
-          if (isCloseX && isCloseY && isCorrectRotation) {
-            return {
-              ...piece,
-              x: piece.correctX,
-              y: piece.correctY,
-              isCorrect: true
-            };
-          }
-        }
-        return piece;
-      }));
-    }, 300);
   };
 
-  // dvojni-tap za rotacijo
-  const lastTapRef = useRef<{ id: number; time: number } | null>(null);
-  const handleTap = (e: React.TouchEvent<HTMLDivElement>, id: number) => {
-    e.preventDefault();
-    const now = new Date().getTime();
-    
-    if (lastTapRef.current && 
-        lastTapRef.current.id === id && 
-        now - lastTapRef.current.time < 300) {
-      rotatePiece(id);
-      lastTapRef.current = null;
-    } else {
-      lastTapRef.current = { id, time: now };
-    }
-  };
-
-  // preklopi prikaz resitve
+  // Preklopi prikaz resitve z zmanjsanjem tock
   const toggleSolution = () => {
+    if (!showSolution) {
+      const pointsLost = Math.floor(scoringConfig.maxPoints * 0.1);
+      setPointsLostToHints(prev => prev + pointsLost);
+      setHintsUsed(prev => prev + 1);
+    }
     setShowSolution(!showSolution);
   };
 
   return (
     <div className="flex flex-col items-center w-full gap-4">
-      {/* stoparica in tockovanje */}
+      {/* Stoparica in tockovanje */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full max-w-md">
         <Timer
           isRunning={gameTimer}
@@ -380,21 +333,31 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
           timeLimit={scoringConfig.timeLimit}
           className="flex-1"
         />
-        <div className="text-center p-3 rounded-lg bg-green-100 text-green-700 font-semibold flex-1">
-          <div className="text-sm text-gray-600 mb-1">Maksimalno</div>
-          <div className="text-xl">{scoringConfig.maxPoints}</div>
-          <div className="text-xs text-gray-500">tock</div>
+        <div className="text-center p-3 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 text-green-700 font-semibold flex-1 shadow-sm">
+          <div className="text-sm text-green-600 mb-1">Maksimalno</div>
+          <div className="text-xl font-bold">{scoringConfig.maxPoints - pointsLostToHints}</div>
+          <div className="text-xs text-green-500">točk</div>
         </div>
       </div>
 
-      {/* gumb za prikaz/skrivanje resitve */}
-      <Button 
-        variant="outline" 
-        onClick={toggleSolution}
-        className="mb-2 hover:scale-105 transition-all duration-300 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:border-gray-300"
-      >
-        {showSolution ? 'Skrij resitev' : 'Prikazi resitev'}
-      </Button>
+      {/* Kontrolni gumbi */}
+      <div className="flex gap-3 flex-wrap justify-center">
+        <Button 
+          variant="outline" 
+          onClick={toggleSolution}
+          className="flex items-center gap-2 bg-white hover:bg-gray-50 border-2 border-blue-200 text-blue-700 hover:border-blue-300 transition-all duration-200 rounded-xl shadow-sm"
+          size="sm"
+        >
+          {showSolution ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {showSolution ? 'Skrij rešitev' : 'Prikaži rešitev (-10%)'}
+        </Button>
+
+        {hintsUsed > 0 && (
+          <div className="text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+            Pomoči: {hintsUsed} (-{pointsLostToHints} točk)
+          </div>
+        )}
+      </div>
       
       <div className="relative" style={{
         width: `${containerDimensions.width}px`,
@@ -402,10 +365,9 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
         maxWidth: '90vw',
         maxHeight: '70vh'
       }}>
-        {/* ozadje s prikazom resitve */}
         {showSolution && (
           <div 
-            className="absolute inset-0 z-0"
+            className="absolute inset-0 z-0 rounded-xl"
             style={{
               backgroundImage: `url(${imageSrc})`,
               backgroundSize: 'contain',
@@ -417,12 +379,11 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
           />
         )}
         
-        {/* kontejner za sestavljanje */}
         <div 
           ref={containerRef}
           className={cn(
-            "relative w-full h-full rounded-md shadow-inner overflow-hidden touch-none",
-            showSolution ? 'bg-white/30' : 'bg-white/90',
+            "relative w-full h-full rounded-xl shadow-inner overflow-hidden touch-none border-2",
+            showSolution ? 'bg-white/40 border-blue-200' : 'bg-gradient-to-br from-gray-50 to-white border-gray-200',
             !imageLoaded && 'invisible'
           )}
           onMouseMove={(e) => handleDragMove(e)}
@@ -431,7 +392,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
           onTouchMove={(e) => handleDragMove(e)}
           onTouchEnd={handleDragEnd}
         >
-          {/* mreza */}
           <div 
             className="absolute inset-0 grid pointer-events-none" 
             style={{ 
@@ -440,7 +400,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             }}
           >
             {Array.from({ length: rows * cols }).map((_, i) => (
-              <div key={`grid-${i}`} className="border border-dashed border-gray-300" />
+              <div key={`grid-${i}`} className="border border-dashed border-gray-300/50" />
             ))}
           </div>
           
@@ -448,8 +408,8 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             <div
               key={piece.id}
               className={cn(
-                "absolute cursor-grab active:cursor-grabbing",
-                "transition-transform duration-300"
+                "absolute cursor-grab active:cursor-grabbing group",
+                "transition-all duration-200 hover:scale-105"
               )}
               style={{
                 width: `${pieceSize.width}px`,
@@ -462,21 +422,18 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
               }}
               onMouseDown={(e) => handleDragStart(e, piece.id)}
               onTouchStart={(e) => handleDragStart(e, piece.id)}
-              onDoubleClick={() => rotatePiece(piece.id)}
-              onTouchEnd={(e) => isMobile && handleTap(e, piece.id)}
+              onClick={() => rotatePiece(piece.id)}
             >
-              {/* ce uspesno puzzle na pravi lokaciji zelen rob */}
               <div 
                 className={cn(
-                  "w-full h-full bg-white border-2 overflow-hidden",
-                  piece.isCorrect ? "border-green-500" : "border-gray-400",
-                  "transition-all duration-200"
+                  "w-full h-full rounded-lg border-2 overflow-hidden",
+                  piece.isCorrect ? "border-green-400 shadow-green-200 shadow-lg" : "border-gray-300 shadow-lg",
+                  "transition-all duration-200 group-hover:shadow-xl"
                 )}
                 style={{
                   backgroundImage: `url(${imageSrc})`,
                   backgroundSize: `${cols * 100}% ${rows * 100}%`,
                   backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
-                  boxShadow: piece.isCorrect ? 'none' : '0 2px 4px rgba(0,0,0,0.2)'
                 }}
               />
             </div>

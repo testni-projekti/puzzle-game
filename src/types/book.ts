@@ -8,4 +8,5 @@ export interface BookCover {
   year?: string;
   publisher?: string;
   description?: string;
+  quote?: string; // Dodamo citat knjige
 }
