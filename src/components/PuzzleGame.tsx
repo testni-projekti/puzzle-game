@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -6,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Timer } from '@/components/Timer';
 import { getScoringConfig, calculateScore, ScoreResult } from '@/utils/scoringSystem';
 import { GameStorage } from '@/utils/gameStorage';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, RotateCcw } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -214,7 +213,8 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   };
 
   const handleDragStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, id: number) => {
-    e.preventDefault();   
+    e.preventDefault();
+    e.stopPropagation();
 
     const piece = pieces.find(p => p.id === id);
     if (!piece) return;
@@ -295,8 +295,10 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }
   };
 
-  // Popravljena rotacija - en klik, vrtenje za 90 stopinj
-  const rotatePiece = (id: number) => {
+  const rotatePiece = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     setPieces(prev => prev.map(piece => {
       if (piece.id === id) {
         const newRotation = (piece.rotation + 90) % 360;
@@ -316,7 +318,6 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     }));
   };
 
-  // Popravljena funkcija za prikaz rešitve - samo enkrat se odštejejo točke
   const toggleSolution = () => {
     if (!showSolution && !hintUsedOnce) {
       const pointsLost = Math.floor(scoringConfig.maxPoints * 0.1);
@@ -412,7 +413,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             <div
               key={piece.id}
               className={cn(
-                "absolute cursor-grab active:cursor-grabbing group",
+                "absolute group",
                 "transition-all duration-200 hover:scale-105"
               )}
               style={{
@@ -424,22 +425,35 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
                 transform: `rotate(${piece.rotation}deg)`,
                 touchAction: "none"
               }}
-              onMouseDown={(e) => handleDragStart(e, piece.id)}
-              onTouchStart={(e) => handleDragStart(e, piece.id)}
-              onClick={() => rotatePiece(piece.id)}
             >
-              <div 
-                className={cn(
-                  "w-full h-full rounded-lg border-2 overflow-hidden",
-                  piece.isCorrect ? "border-green-400 shadow-green-200 shadow-lg" : "border-gray-300 shadow-lg",
-                  "transition-all duration-200 group-hover:shadow-xl"
-                )}
-                style={{
-                  backgroundImage: `url(${imageSrc})`,
-                  backgroundSize: `${cols * 100}% ${rows * 100}%`,
-                  backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
-                }}
-              />
+              {/* Drag area */}
+              <div
+                className="w-full h-full cursor-grab active:cursor-grabbing relative"
+                onMouseDown={(e) => handleDragStart(e, piece.id)}
+                onTouchStart={(e) => handleDragStart(e, piece.id)}
+              >
+                <div 
+                  className={cn(
+                    "w-full h-full rounded-lg border-2 overflow-hidden",
+                    piece.isCorrect ? "border-green-400 shadow-green-200 shadow-lg" : "border-gray-300 shadow-lg",
+                    "transition-all duration-200 group-hover:shadow-xl"
+                  )}
+                  style={{
+                    backgroundImage: `url(${imageSrc})`,
+                    backgroundSize: `${cols * 100}% ${rows * 100}%`,
+                    backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
+                  }}
+                />
+                
+                {/* Rotation button */}
+                <button
+                  className="absolute top-1 right-1 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-1 shadow-sm hover:shadow-md transition-all duration-200 opacity-0 group-hover:opacity-100"
+                  onClick={(e) => rotatePiece(e, piece.id)}
+                  style={{ fontSize: '10px' }}
+                >
+                  <RotateCcw className="h-3 w-3 text-gray-600" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
