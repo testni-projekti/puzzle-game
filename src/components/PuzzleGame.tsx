@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Timer } from '@/components/Timer';
 import { getScoringConfig, calculateScore, ScoreResult } from '@/utils/scoringSystem';
 import { GameStorage } from '@/utils/gameStorage';
-import { Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -55,6 +55,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
   const [hintsUsed, setHintsUsed] = useState(0);
   const [pointsLostToHints, setPointsLostToHints] = useState(0);
   const [hintUsedOnce, setHintUsedOnce] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const scoringConfig = getScoringConfig(rows, cols);
 
   const handleTimeUpdate = useCallback((time: number) => {
@@ -212,6 +213,32 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     setHintUsedOnce(false);
   };
 
+  const handlePieceClick = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only rotate if not dragging
+    if (!isDragging) {
+      setPieces(prev => prev.map(piece => {
+        if (piece.id === id) {
+          const newRotation = (piece.rotation + 90) % 360;
+          const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
+          const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
+          const isCorrectRotation = newRotation === 0;
+          
+          return {
+            ...piece,
+            rotation: newRotation,
+            isCorrect: isCloseX && isCloseY && isCorrectRotation,
+            x: isCloseX && isCloseY && isCorrectRotation ? piece.correctX : piece.x,
+            y: isCloseX && isCloseY && isCorrectRotation ? piece.correctY : piece.y
+          };
+        }
+        return piece;
+      }));
+    }
+  };
+
   const handleDragStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, id: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -219,6 +246,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
     const piece = pieces.find(p => p.id === id);
     if (!piece) return;
 
+    setIsDragging(true);
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     
     if ('clientX' in e) {
@@ -292,30 +320,9 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
       }));
       
       setDraggingPiece(null);
+      // Reset dragging state after a short delay
+      setTimeout(() => setIsDragging(false), 100);
     }
-  };
-
-  const rotatePiece = (e: React.MouseEvent, id: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setPieces(prev => prev.map(piece => {
-      if (piece.id === id) {
-        const newRotation = (piece.rotation + 90) % 360;
-        const isCloseX = Math.abs(piece.x - piece.correctX) < pieceSize.width * 0.15;
-        const isCloseY = Math.abs(piece.y - piece.correctY) < pieceSize.height * 0.15;
-        const isCorrectRotation = newRotation === 0;
-        
-        return {
-          ...piece,
-          rotation: newRotation,
-          isCorrect: isCloseX && isCloseY && isCorrectRotation,
-          x: isCloseX && isCloseY && isCorrectRotation ? piece.correctX : piece.x,
-          y: isCloseX && isCloseY && isCorrectRotation ? piece.correctY : piece.y
-        };
-      }
-      return piece;
-    }));
   };
 
   const toggleSolution = () => {
@@ -413,7 +420,7 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
             <div
               key={piece.id}
               className={cn(
-                "absolute group",
+                "absolute group cursor-pointer",
                 "transition-all duration-200 hover:scale-105"
               )}
               style={{
@@ -425,35 +432,22 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({
                 transform: `rotate(${piece.rotation}deg)`,
                 touchAction: "none"
               }}
+              onClick={(e) => handlePieceClick(e, piece.id)}
+              onMouseDown={(e) => handleDragStart(e, piece.id)}
+              onTouchStart={(e) => handleDragStart(e, piece.id)}
             >
-              {/* Drag area */}
-              <div
-                className="w-full h-full cursor-grab active:cursor-grabbing relative"
-                onMouseDown={(e) => handleDragStart(e, piece.id)}
-                onTouchStart={(e) => handleDragStart(e, piece.id)}
-              >
-                <div 
-                  className={cn(
-                    "w-full h-full rounded-lg border-2 overflow-hidden",
-                    piece.isCorrect ? "border-green-400 shadow-green-200 shadow-lg" : "border-gray-300 shadow-lg",
-                    "transition-all duration-200 group-hover:shadow-xl"
-                  )}
-                  style={{
-                    backgroundImage: `url(${imageSrc})`,
-                    backgroundSize: `${cols * 100}% ${rows * 100}%`,
-                    backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
-                  }}
-                />
-                
-                {/* Rotation button */}
-                <button
-                  className="absolute top-1 right-1 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-1 shadow-sm hover:shadow-md transition-all duration-200 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => rotatePiece(e, piece.id)}
-                  style={{ fontSize: '10px' }}
-                >
-                  <RotateCcw className="h-3 w-3 text-gray-600" />
-                </button>
-              </div>
+              <div 
+                className={cn(
+                  "w-full h-full rounded-lg border-2 overflow-hidden",
+                  piece.isCorrect ? "border-green-400 shadow-green-200 shadow-lg" : "border-gray-300 shadow-lg",
+                  "transition-all duration-200 group-hover:shadow-xl"
+                )}
+                style={{
+                  backgroundImage: `url(${imageSrc})`,
+                  backgroundSize: `${cols * 100}% ${rows * 100}%`,
+                  backgroundPosition: `${-piece.correctX / pieceSize.width * 100}% ${-piece.correctY / pieceSize.height * 100}%`,
+                }}
+              />
             </div>
           ))}
         </div>
